@@ -6,10 +6,11 @@ Script to reduce the **size of video files** using FFMPEG.
 Idea of this script:  https://coderunner.io/shrink-videos-with-ffmpeg-and-preserve-metadata/
 
 
-Which codecs are supported?
+Which input codecs are supported?
 --------------------------------------
 - **H.264**:
   - **CRF** (Constant Rate Factor). Basically translates as *"try to keep this quality overall"*, and will use more or less bits at different parts of the video, depending on the content. (the **bitrate* is variable**).
+  - **Output codec**. Possible options are **H.264** or **H.265** codecs. When using H.265 video is reduced half of its size maintaining the same video quality.
   - **Rest of video properties**. They are not modified.
 - **Videos with different codecs**:
   - They are copied to another folder without being modified
@@ -18,6 +19,9 @@ Which codecs are supported?
 How to use
 ------------
 - Install **Python** (3.7 version recommended)
+- [Optional] Configure virtualenv:
+  - Install virtual env: `python3.7 -m venv venv`
+  - Activate it: `source venv/bin/activate`
 - Install **FFmpeg** and add it to system PATH
 - Install **FFprobe** (*This is installed on ffmpeg installation by default*)
 - Look at script options: `python main.py -h`

@@ -48,6 +48,63 @@ def get_video_metadata(video_path):
             'audio': audio_stream}
 
 
+def reduce_video_using_h264(video_source_path, video_destination_path, crf='23'):
+    # "copy_unknown" -> "",           //if there are streams ffmpeg doesn't know about, still copy them (e.g some GoPro data stuff)
+    # "map_metadata" -> "0",          //copy over the global metadata from the first (only) input
+    # "map"          -> "0",          //copy *all* streams found in the file, not just the best audio and video as is the default (e.g. including data)
+    # "codec"        -> "copy",       //for all streams, default to just copying as it with no transcoding
+    # "preset"       -> "medium"      //fmpeg speed preset to use
+    #
+    # "codec:v" -> "libx264",         //specifically for the video stream, reencode to x264
+    # "pix_fmt" -> "yuv420p",         //default pix_fmt
+    # "crf"     -> "23"               //default constant rate factor for quality. 0-52 where 18 is near visually lossless
+    #
+    # "codec:a" -> "libfdk_aac",      //specifically for the audio stream, reencode to aac
+    # "vbr"     -> "4"                //variable bit rate quality setting
+
+    # Use the same pix_fmt than the source video
+    pix_fmt = video_metadata['video']['pix_fmt']
+
+    # Default CRF value
+    crf = crf or '23'
+
+    subprocess.call([FFMPEG_BIN, '-i', video_source_path,
+                     '-copy_unknown',
+                     '-map_metadata', '0',
+                     '-map', '0',
+                     '-codec', 'copy',
+                     '-codec:v', 'libx264',
+                     '-pix_fmt', pix_fmt,
+                     '-preset', 'slow',
+                     '-crf', crf,  video_destination_path])
+
+    # Preserve file dates that are not in the video metadata. Example: modification_time
+    preserve_file_dates(source_file=video_source_path,
+                        destination_file=video_destination_path)
+
+
+def reduce_video_using_h265(video_source_path, video_destination_path, crf='28'):
+    # Use the same pix_fmt than the source video
+    pix_fmt = video_metadata['video']['pix_fmt']
+
+    # Default CRF value
+    crf = crf or '28'
+
+    subprocess.call([FFMPEG_BIN, '-i', video_source_path,
+                     '-copy_unknown',
+                     '-map_metadata', '0',
+                     '-map', '0',
+                     '-codec', 'copy',
+                     '-codec:v', 'libx265',
+                     '-pix_fmt', pix_fmt,
+                     '-preset', 'slow',
+                     '-crf', crf,  video_destination_path])
+
+    # Preserve file dates that are not in the video metadata. Example: modification_time
+    preserve_file_dates(source_file=video_source_path,
+                        destination_file=video_destination_path)
+
+
 if __name__ == '__main__':
     """
     Main operation of this script:
@@ -55,6 +112,7 @@ if __name__ == '__main__':
     2. H.264 videos:
       2.1 Reduce video quality
         2.1.1 Use a fixed quality that the human eye can not detect
+        2.1.2 Use H.264 or H.265 output code. If H.265 is used, 50 percent of the video is reduced maintaining the same quality
       2.2 Preserve FILE metadata (dates...)
     3. Invalid video files are copied to failures folder
     """
@@ -65,24 +123,26 @@ if __name__ == '__main__':
     # Source folder is mandatory
     parser.add_argument('source_folder',
                         help='videos source folder')
+    parser.add_argument('codec_output',
+                        choices=['h264', 'h265'],
+                        help='output codec to use')
     parser.add_argument('--destination_folder',
                         help='videos destination folder. Default is `source_folder/results`')
     parser.add_argument('--failures_folder',
                         help='videos destination folder. Default is `destination_folder/failures`')
     parser.add_argument('--crf',
-                        type=int,
-                        choices=range(0, 51),
-                        default=23,
-                        help='video crf between 1-51`. Default is 23')
+                        type=str,
+                        help='video crf between 0-51`. Default is 23 for h264 and 28 for h265')
 
     args = parser.parse_args()
 
     source_folder = args.source_folder
+    codec_output = args.codec_output
     destination_folder = args.destination_folder or f'{source_folder}/results'
     failures_folder = args.failures_folder or f'{destination_folder}/failures'
     other_codecs_folder = f'{destination_folder}/other_codecs'
     # Because ffmpeg needs a str for CRF
-    crf = str(args.crf)
+    crf = args.crf
     #
     ###
 
@@ -117,35 +177,17 @@ if __name__ == '__main__':
                     if video_metadata['video']['codec_name'] == 'h264':
                         print(f"Video format detected: {video_metadata['video']['codec_name']}")
 
-                        # "copy_unknown" -> "",           //if there are streams ffmpeg doesn't know about, still copy them (e.g some GoPro data stuff)
-                        # "map_metadata" -> "0",          //copy over the global metadata from the first (only) input
-                        # "map"          -> "0",          //copy *all* streams found in the file, not just the best audio and video as is the default (e.g. including data)
-                        # "codec"        -> "copy",       //for all streams, default to just copying as it with no transcoding
-                        # "preset"       -> "medium"      //fmpeg speed preset to use
-                        #
-                        # "codec:v" -> "libx264",         //specifically for the video stream, reencode to x264
-                        # "pix_fmt" -> "yuv420p",         //default pix_fmt
-                        # "crf"     -> "23"               //default constant rate factor for quality. 0-52 where 18 is near visually lossless
-                        #
-                        # "codec:a" -> "libfdk_aac",      //specifically for the audio stream, reencode to aac
-                        # "vbr"     -> "4"                //variable bit rate quality setting
+                        if codec_output == 'h264':
+                            reduce_video_using_h264(video_source_path=video_source_path,
+                                                    video_destination_path=video_destination_path,
+                                                    crf=crf)
+                        elif codec_output == 'h265':
+                            reduce_video_using_h265(video_source_path=video_source_path,
+                                                    video_destination_path=video_destination_path,
+                                                    crf=crf)
+                        else:
+                            raise Exception('Output codec not supported')
 
-                        # Use the same pix_fmt than the source video
-                        pix_fmt = video_metadata['video']['pix_fmt']
-
-                        subprocess.call([FFMPEG_BIN, '-i', video_source_path,
-                                         '-copy_unknown',
-                                         '-map_metadata', '0',
-                                         '-map', '0',
-                                         '-codec', 'copy',
-                                         '-codec:v', 'libx264',
-                                         '-pix_fmt', pix_fmt,
-                                         '-preset', 'slow',
-                                         '-crf', crf,  video_destination_path])
-
-                        # Preserve file dates that are not in the video metadata. Example: modification_time
-                        preserve_file_dates(source_file=video_source_path,
-                                            destination_file=video_destination_path)
                     else:
                         print(f"Non supported video format detected: {video_metadata['video']['codec_name']}")
 
