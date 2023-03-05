@@ -48,7 +48,7 @@ def get_video_metadata(video_path):
             'audio': audio_stream}
 
 
-def reduce_video_using_h264(video_source_path, video_destination_path, crf='23'):
+def reduce_video_using_h264(video_source_path, video_destination_path, pix_fmt, crf='23'):
     # "copy_unknown" -> "",           //if there are streams ffmpeg doesn't know about, still copy them (e.g some GoPro data stuff)
     # "map_metadata" -> "0",          //copy over the global metadata from the first (only) input
     # "map"          -> "0",          //copy *all* streams found in the file, not just the best audio and video as is the default (e.g. including data)
@@ -62,9 +62,6 @@ def reduce_video_using_h264(video_source_path, video_destination_path, crf='23')
     # "codec:a" -> "libfdk_aac",      //specifically for the audio stream, reencode to aac
     # "vbr"     -> "4"                //variable bit rate quality setting
 
-    # Use the same pix_fmt than the source video
-    pix_fmt = video_metadata['video']['pix_fmt']
-
     # Default CRF value
     crf = crf or '23'
 
@@ -72,6 +69,7 @@ def reduce_video_using_h264(video_source_path, video_destination_path, crf='23')
                      '-copy_unknown',
                      '-map_metadata', '0',
                      '-map', '0',
+                     '-map', '-0:d',
                      '-codec', 'copy',
                      '-codec:v', 'libx264',
                      '-pix_fmt', pix_fmt,
@@ -83,9 +81,7 @@ def reduce_video_using_h264(video_source_path, video_destination_path, crf='23')
                         destination_file=video_destination_path)
 
 
-def reduce_video_using_h265(video_source_path, video_destination_path, crf='28'):
-    # Use the same pix_fmt than the source video
-    pix_fmt = video_metadata['video']['pix_fmt']
+def reduce_video_using_h265(video_source_path, video_destination_path, pix_fmt, crf='28'):
 
     # Default CRF value
     crf = crf or '28'
@@ -94,6 +90,7 @@ def reduce_video_using_h265(video_source_path, video_destination_path, crf='28')
                      '-copy_unknown',
                      '-map_metadata', '0',
                      '-map', '0',
+                     '-map', '-0:d',
                      '-codec', 'copy',
                      '-codec:v', 'libx265',
                      '-pix_fmt', pix_fmt,
@@ -103,6 +100,78 @@ def reduce_video_using_h265(video_source_path, video_destination_path, crf='28')
     # Preserve file dates that are not in the video metadata. Example: modification_time
     preserve_file_dates(source_file=video_source_path,
                         destination_file=video_destination_path)
+
+
+def reduce_video(source_folder, codec_output, destination_folder, failures_folder, other_codecs_folder, crf, entry):
+    try:
+        print(entry.name)
+
+        video_source_path = f'{source_folder}/{entry.name}'
+        video_destination_path = f'{destination_folder}/{entry.name}'
+
+        video_metadata = get_video_metadata(video_source_path)
+        pix_fmt = video_metadata['video']['pix_fmt']
+
+        # Only process videos with these codecs (at this moment)
+        if video_metadata['video']['codec_name'] in ['h264', 'hevc']:
+            print(f"Video format detected: {video_metadata['video']['codec_name']}")
+
+
+            # Use the same pix_fmt than the source video
+            if codec_output == 'h264':
+                reduce_video_using_h264(
+                    video_source_path=video_source_path,
+                    video_destination_path=video_destination_path,
+                    pix_fmt=pix_fmt,
+                    crf=crf
+                )
+            elif codec_output == 'h265':
+                reduce_video_using_h265(
+                    video_source_path=video_source_path,
+                    video_destination_path=video_destination_path,
+                    pix_fmt=pix_fmt,
+                    crf=crf
+                )
+            else:
+                raise Exception('Output codec not supported')
+
+        else:
+            print(f"Non supported video format detected: {video_metadata['video']['codec_name']}")
+
+                        # Create folder if it does not exist
+            if not os.path.exists(other_codecs_folder):
+                os.makedirs(other_codecs_folder)
+
+            video_other_codecs_path = f'{other_codecs_folder}/{entry.name}'
+                        # Copy files with other video formats
+            shutil.copy2(video_source_path, video_other_codecs_path)
+    except Exception as exception:
+                    # Create failures folder if it does not exist
+        if not os.path.exists(failures_folder):
+            os.makedirs(failures_folder)
+
+        video_failure_path = f'{failures_folder}/{entry.name}'
+                    # Copy files that have raised an exception to the failure folder
+        shutil.copy2(video_source_path, video_failure_path)
+
+                    # Show exception stack trace
+        traceback.print_exc()
+
+
+def crawl(source_folder, codec_output, destination_folder, failures_folder, other_codecs_folder, crf):
+    with os.scandir(source_folder) as entries:
+        for entry in entries:
+            if entry.is_file():
+                reduce_video(
+                    source_folder,
+                    codec_output,
+                    destination_folder,
+                    failures_folder,
+                    other_codecs_folder,
+                    crf,
+                    entry
+                )
+
 
 
 if __name__ == '__main__':
@@ -161,51 +230,4 @@ if __name__ == '__main__':
         os.makedirs(destination_folder)
 
     # Process videos
-    with os.scandir(source_folder) as entries:
-        for entry in entries:
-            if entry.is_file():
-                try:
-
-                    print(entry.name)
-
-                    video_source_path = f'{source_folder}/{entry.name}'
-                    video_destination_path = f'{destination_folder}/{entry.name}'
-
-                    video_metadata = get_video_metadata(video_source_path)
-
-                    # Only process videos with this codec (at this moment)
-                    if video_metadata['video']['codec_name'] == 'h264':
-                        print(f"Video format detected: {video_metadata['video']['codec_name']}")
-
-                        if codec_output == 'h264':
-                            reduce_video_using_h264(video_source_path=video_source_path,
-                                                    video_destination_path=video_destination_path,
-                                                    crf=crf)
-                        elif codec_output == 'h265':
-                            reduce_video_using_h265(video_source_path=video_source_path,
-                                                    video_destination_path=video_destination_path,
-                                                    crf=crf)
-                        else:
-                            raise Exception('Output codec not supported')
-
-                    else:
-                        print(f"Non supported video format detected: {video_metadata['video']['codec_name']}")
-
-                        # Create folder if it does not exist
-                        if not os.path.exists(other_codecs_folder):
-                            os.makedirs(other_codecs_folder)
-
-                        video_other_codecs_path = f'{other_codecs_folder}/{entry.name}'
-                        # Copy files with other video formats
-                        shutil.copy2(video_source_path, video_other_codecs_path)
-                except Exception as exception:
-                    # Create failures folder if it does not exist
-                    if not os.path.exists(failures_folder):
-                        os.makedirs(failures_folder)
-
-                    video_failure_path = f'{failures_folder}/{entry.name}'
-                    # Copy files that have raised an exception to the failure folder
-                    shutil.copy2(video_source_path, video_failure_path)
-
-                    # Show exception stack trace
-                    traceback.print_exc()
+    crawl(source_folder, codec_output, destination_folder, failures_folder, other_codecs_folder, crf)
