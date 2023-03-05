@@ -8,7 +8,7 @@ Idea of this script:  https://coderunner.io/shrink-videos-with-ffmpeg-and-preser
 
 Which input codecs are supported?
 --------------------------------------
-- **H.264**:
+- **H.264 & H.265**:
   - **CRF** (Constant Rate Factor). Basically translates as *"try to keep this quality overall"*, and will use more or less bits at different parts of the video, depending on the content. (the **bitrate* is variable**).
   - **Output codec**. Possible options are **H.264** or **H.265** codecs. When using H.265 video is reduced half of its size maintaining the same video quality.
   - **Rest of video properties**. They are not modified.
@@ -44,9 +44,9 @@ Original video  metadata will be copied to the new modified video:
   - **Container metadata**. All the original container metadata is copied using ffmpeg `-map_metadata` option
   - **FILE dates**. Access and modification file dates.
 
-### What happens if I have h.264 videos and another videos which use different codecs in the same folder?
+### What happens if I have h.264 & h.265 videos and another videos which use different codecs in the same folder?
 
-Non-h.264 videos will be copied to the destination_folder/other_codecs by default **without being modified**
+Non `h.264` or `h.265` videos will be copied to the destination_folder/other_codecs by default **without being modified**
 
 ### What happens if in the middle of the process there is a failure with one video?
 
@@ -117,3 +117,8 @@ If there were frames with variable delta, than it will also show min and max del
 
 #### FFMPEG uses CFR (Constant Frame Rate) by default for MP4 output
 https://trac.ffmpeg.org/wiki/ChangingFrameRate
+
+### H.265
+
+#### Tips about H.265
+https://trac.ffmpeg.org/wiki/Encode/H.265
