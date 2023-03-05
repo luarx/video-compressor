@@ -171,6 +171,8 @@ def crawl(source_folder, codec_output, destination_folder, failures_folder, othe
                     crf,
                     entry
                 )
+            elif entry.is_dir() and entry.path != destination_folder:
+                crawl(entry.path, codec_output, destination_folder, failures_folder, other_codecs_folder, crf)
 
 
 
