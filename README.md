@@ -28,6 +28,14 @@ How to use
 - Execute it: `python main.py [VIDEOS_FOLDER] [--ANOTHER_OPTIONS]`
 
 
+GUI
+---
+- Launch the desktop interface: `python video_compressor_gui.py`
+- Select one or multiple videos.
+- Choose H.264/H.265, quality, preset, maximum resolution, and output location.
+- FFmpeg must be installed and available on the system PATH.
+
+
 TIPS
 -----------
 You can create an isolated Python environment to install required libraries with virtualenv:
